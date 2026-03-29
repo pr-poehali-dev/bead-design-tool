@@ -8,9 +8,9 @@ type Page = "home" | "constructor" | "gallery" | "contact";
 const JEWELRY_TYPES = [
   { id: "bracelet", label: "Браслет", emoji: "📿", desc: "Круговой макет", slots: 16 },
   { id: "necklace", label: "Ожерелье", emoji: "💎", desc: "Линейный макет", slots: 24 },
-  { id: "earrings", label: "Серьги", emoji: "✨", desc: "1–3 бусины", slots: 3 },
-  { id: "keychain_bag", label: "Брелок на сумку", emoji: "👜", desc: "Подвеска", slots: 8 },
-  { id: "keychain_phone", label: "Брелок на телефон", emoji: "📱", desc: "Шнурок", slots: 10 },
+  { id: "earrings", label: "Серьги", emoji: "✨", desc: "Пара серёг", slots: 4 },
+  { id: "keychain_bag", label: "Брелок на сумку", emoji: "👜", desc: "Вертикальная подвеска", slots: 7 },
+  { id: "keychain_phone", label: "Брелок на телефон", emoji: "📱", desc: "Шнурок-подвеска", slots: 10 },
 ];
 
 type BeadColor = { name: string; hex: string; label: string };
@@ -60,6 +60,172 @@ type Bead = {
 
 type PlacedBead = Bead | null;
 
+// Возвращает SVG-путь/элемент для формы бусины в браслете/ожерелье
+function SvgBead({ bead, cx, cy, r, onClick }: {
+  bead: PlacedBead; cx: number; cy: number; r: number; onClick: () => void
+}) {
+  const gradId = `g${cx.toFixed(0)}${cy.toFixed(0)}`;
+  const empty = !bead;
+  const color = bead?.color.hex ?? "rgba(220,80,120,0.07)";
+  const shape = bead?.shape ?? "round";
+
+  const commonProps = {
+    onClick,
+    style: { cursor: "pointer" },
+  };
+
+  if (empty) {
+    return (
+      <g {...commonProps}>
+        <circle cx={cx} cy={cy} r={r}
+          fill="rgba(220,80,120,0.07)"
+          stroke="rgba(220,80,120,0.35)"
+          strokeWidth={1.5} strokeDasharray="3 2" />
+        <text x={cx} y={cy + 1} textAnchor="middle" dominantBaseline="middle"
+          fontSize={r * 0.8} fill="rgba(220,80,120,0.4)">+</text>
+      </g>
+    );
+  }
+
+  const fill = `url(#${gradId})`;
+  const shadow = "drop-shadow(0 2px 5px rgba(0,0,0,0.18))";
+
+  const gradDef = (
+    <defs>
+      <radialGradient id={gradId} cx="35%" cy="30%" r="70%">
+        <stop offset="0%" stopColor={color} stopOpacity="1" />
+        <stop offset="60%" stopColor={color} stopOpacity="0.85" />
+        <stop offset="100%" stopColor={color} stopOpacity="0.55" />
+      </radialGradient>
+    </defs>
+  );
+
+  let shape_el: React.ReactNode;
+
+  if (shape === "round") {
+    shape_el = <circle cx={cx} cy={cy} r={r} fill={fill} stroke="rgba(255,255,255,0.7)" strokeWidth={2} style={{ filter: shadow }} />;
+  } else if (shape === "oval") {
+    shape_el = <ellipse cx={cx} cy={cy} rx={r * 0.7} ry={r} fill={fill} stroke="rgba(255,255,255,0.7)" strokeWidth={2} style={{ filter: shadow }} />;
+  } else if (shape === "facet") {
+    const pts = Array.from({ length: 8 }, (_, i) => {
+      const a = (i / 8) * 2 * Math.PI - Math.PI / 8;
+      const rr = i % 2 === 0 ? r : r * 0.78;
+      return `${(cx + rr * Math.cos(a)).toFixed(2)},${(cy + rr * Math.sin(a)).toFixed(2)}`;
+    }).join(" ");
+    shape_el = <polygon points={pts} fill={fill} stroke="rgba(255,255,255,0.8)" strokeWidth={1.5} style={{ filter: shadow }} />;
+  } else if (shape === "tube") {
+    const rw = r * 0.6, rh = r * 1.05;
+    shape_el = <ellipse cx={cx} cy={cy} rx={rw} ry={rh} fill={fill} stroke="rgba(255,255,255,0.7)" strokeWidth={2} style={{ filter: shadow }} />;
+  } else if (shape === "heart") {
+    const s = r * 0.065;
+    const d = `M ${cx},${cy + r * 0.55} C ${cx - r * 1.2},${cy - r * 0.3} ${cx - r * 1.2},${cy - r * 1.1} ${cx},${cy - r * 0.6} C ${cx + r * 1.2},${cy - r * 1.1} ${cx + r * 1.2},${cy - r * 0.3} ${cx},${cy + r * 0.55} Z`;
+    shape_el = <path d={d} fill={fill} stroke="rgba(255,255,255,0.7)" strokeWidth={2} style={{ filter: shadow }} />;
+  } else if (shape === "star") {
+    const pts = Array.from({ length: 10 }, (_, i) => {
+      const a = (i / 10) * 2 * Math.PI - Math.PI / 2;
+      const rr = i % 2 === 0 ? r : r * 0.45;
+      return `${(cx + rr * Math.cos(a)).toFixed(2)},${(cy + rr * Math.sin(a)).toFixed(2)}`;
+    }).join(" ");
+    shape_el = <polygon points={pts} fill={fill} stroke="rgba(255,255,255,0.7)" strokeWidth={1.5} style={{ filter: shadow }} />;
+  } else {
+    shape_el = <circle cx={cx} cy={cy} r={r} fill={fill} stroke="rgba(255,255,255,0.7)" strokeWidth={2} style={{ filter: shadow }} />;
+  }
+
+  return <g {...commonProps}>{gradDef}{shape_el}</g>;
+}
+
+// HTML-бусина для вертикального/ушного макета
+function HtmlBead({ bead, size = 40, onClick }: { bead: PlacedBead; size?: number; onClick: () => void }) {
+  const shape = bead?.shape ?? "round";
+  const color = bead?.color.hex ?? "";
+
+  const borderRadius: Record<BeadShape, string> = {
+    round: "50%",
+    oval: "50% / 35%",
+    facet: "32%",
+    tube: "8px",
+    heart: "50%",
+    star: "50%",
+  };
+
+  if (!bead) {
+    return (
+      <div onClick={onClick}
+        className="flex items-center justify-center cursor-pointer transition-all hover:scale-110"
+        style={{ width: size, height: size, borderRadius: "50%", background: "rgba(220,80,120,0.07)", border: "2px dashed rgba(220,80,120,0.35)", flexShrink: 0 }}>
+        <span style={{ color: "hsl(var(--warm-pink))", opacity: 0.4, fontSize: 16 }}>+</span>
+      </div>
+    );
+  }
+
+  if (shape === "heart") {
+    return (
+      <div onClick={onClick}
+        className="flex items-center justify-center cursor-pointer transition-all hover:scale-110"
+        style={{ width: size, height: size, flexShrink: 0, filter: `drop-shadow(0 2px 6px ${color}66)` }}>
+        <svg viewBox="0 0 24 24" width={size} height={size}>
+          <defs><radialGradient id={`hh${size}`} cx="35%" cy="30%" r="70%">
+            <stop offset="0%" stopColor={color} /><stop offset="100%" stopColor={color} stopOpacity="0.55" />
+          </radialGradient></defs>
+          <path d="M12 21C12 21 3 14 3 8.5A5.5 5.5 0 0 1 12 5.5 5.5 5.5 0 0 1 21 8.5C21 14 12 21 12 21Z"
+            fill={`url(#hh${size})`} stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (shape === "star") {
+    return (
+      <div onClick={onClick}
+        className="flex items-center justify-center cursor-pointer transition-all hover:scale-110"
+        style={{ width: size, height: size, flexShrink: 0, filter: `drop-shadow(0 2px 6px ${color}66)` }}>
+        <svg viewBox="0 0 24 24" width={size} height={size}>
+          <defs><radialGradient id={`hs${size}`} cx="35%" cy="30%" r="70%">
+            <stop offset="0%" stopColor={color} /><stop offset="100%" stopColor={color} stopOpacity="0.55" />
+          </radialGradient></defs>
+          <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"
+            fill={`url(#hs${size})`} stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (shape === "facet") {
+    return (
+      <div onClick={onClick}
+        className="flex items-center justify-center cursor-pointer transition-all hover:scale-110"
+        style={{ width: size, height: size, flexShrink: 0, filter: `drop-shadow(0 2px 6px ${color}66)` }}>
+        <svg viewBox="0 0 40 40" width={size} height={size}>
+          <defs><radialGradient id={`hf${size}`} cx="35%" cy="30%" r="70%">
+            <stop offset="0%" stopColor={color} /><stop offset="100%" stopColor={color} stopOpacity="0.55" />
+          </radialGradient></defs>
+          <polygon points="20,2 30,9 34,20 30,31 20,38 10,31 6,20 10,9"
+            fill={`url(#hf${size})`} stroke="rgba(255,255,255,0.75)" strokeWidth="1.5" />
+          <line x1="20" y1="2" x2="20" y2="38" stroke="rgba(255,255,255,0.25)" strokeWidth="0.8" />
+          <line x1="6" y1="20" x2="34" y2="20" stroke="rgba(255,255,255,0.25)" strokeWidth="0.8" />
+        </svg>
+      </div>
+    );
+  }
+
+  const w = shape === "tube" ? size * 0.6 : shape === "oval" ? size * 0.7 : size;
+  const h = shape === "tube" || shape === "oval" ? size : size;
+  const br = borderRadius[shape];
+
+  return (
+    <div onClick={onClick}
+      className="flex items-center justify-center cursor-pointer transition-all hover:scale-110"
+      style={{ width: size, height: size, flexShrink: 0 }}>
+      <div style={{
+        width: w, height: h,
+        background: `radial-gradient(circle at 35% 30%, ${color}ff, ${color}cc 60%, ${color}77)`,
+        borderRadius: br,
+        boxShadow: `inset -2px -3px 6px rgba(0,0,0,0.18), inset 2px 2px 5px rgba(255,255,255,0.5), 0 2px 8px ${color}55`,
+      }} />
+    </div>
+  );
+}
+
 const GALLERY_ITEMS = [
   { id: 1, name: "Нежный браслет", type: "Браслет", colors: ["#E8849A", "#F2C94C", "#EFE8D8"], emoji: "📿" },
   { id: 2, name: "Летнее ожерелье", type: "Ожерелье", colors: ["#7DD3FC", "#6EE7B7", "#F4A261"], emoji: "💎" },
@@ -82,10 +248,13 @@ function HomePage({ onStart }: { onStart: () => void }) {
         </div>
         <div className="max-w-5xl mx-auto grid md:grid-cols-2 gap-12 items-center">
           <div className="animate-fade-in-up">
-            <div className="inline-flex items-center gap-2 glass-warm rounded-full px-4 py-2 mb-6 text-sm font-medium"
+            <div className="inline-flex items-center gap-2 glass-warm rounded-full px-4 py-2 mb-3 text-sm font-medium"
               style={{ color: "hsl(var(--warm-deep))" }}>
               <span className="animate-pulse-soft w-2 h-2 rounded-full gradient-brand inline-block" />
               Конструктор украшений из бусин
+            </div>
+            <div className="font-cormorant text-xl font-semibold gradient-text mb-3 tracking-wide">
+              kittybeadsy
             </div>
             <h1 className="font-cormorant text-5xl md:text-6xl font-semibold leading-tight mb-6">
               <span className="gradient-text">Создавай эскизы</span>
@@ -305,29 +474,9 @@ function ConstructorPage() {
               const angle = (i / slots) * 2 * Math.PI - Math.PI / 2;
               const x = cx + radius * Math.cos(angle);
               const y = cy + radius * Math.sin(angle);
-              const bead = placedBeads[i];
               return (
-                <g key={i} onClick={() => placeBeadOnSlot(i)} style={{ cursor: "pointer" }}>
-                  {bead && (
-                    <defs>
-                      <radialGradient id={`grad-${i}`} cx="35%" cy="35%" r="65%">
-                        <stop offset="0%" stopColor={bead.color.hex} stopOpacity="1" />
-                        <stop offset="100%" stopColor={bead.color.hex} stopOpacity="0.6" />
-                      </radialGradient>
-                    </defs>
-                  )}
-                  <circle cx={x} cy={y} r={13}
-                    fill={bead ? `url(#grad-${i})` : "rgba(220,80,120,0.07)"}
-                    stroke={bead ? "rgba(255,255,255,0.7)" : "rgba(220,80,120,0.35)"}
-                    strokeWidth={bead ? 2 : 1.5}
-                    strokeDasharray={bead ? "none" : "4 3"}
-                    style={{ filter: bead ? "drop-shadow(0 2px 4px rgba(0,0,0,0.15))" : "none" }}
-                  />
-                  {!bead && (
-                    <text x={x} y={y + 1} textAnchor="middle" dominantBaseline="middle"
-                      fontSize="10" fill="rgba(220,80,120,0.4)">+</text>
-                  )}
-                </g>
+                <SvgBead key={i} bead={placedBeads[i]} cx={x} cy={y} r={13}
+                  onClick={() => placeBeadOnSlot(i)} />
               );
             })}
           </svg>
@@ -340,31 +489,25 @@ function ConstructorPage() {
       return (
         <div className="flex flex-col items-center gap-4">
           <p className="text-sm font-medium" style={{ color: "hsl(var(--muted-foreground))" }}>
-            Серьги · по {earSlots} бусины на каждой
+            Серьги · по {Math.ceil(earSlots / 2)} бусины на каждой
           </p>
           <div className="flex gap-12">
-            {[0, 1].map(ear => (
+            {[0, 1].map(ear => {
+              const perEar = Math.ceil(earSlots / 2);
+              return (
               <div key={ear} className="flex flex-col items-center gap-2">
                 <div className="w-4 h-4 rounded-full border-2 mb-1"
                   style={{ borderColor: "hsl(var(--warm-pink))" }} />
-                {Array.from({ length: earSlots }).map((_, i) => {
-                  const idx = ear * earSlots + i;
-                  const bead = placedBeads[idx] ?? null;
+                {Array.from({ length: perEar }).map((_, i) => {
+                  const idx = ear * perEar + i;
                   return (
-                    <div key={i}
-                      onClick={() => placeBeadOnSlot(idx)}
-                      className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer transition-all hover:scale-110"
-                      style={{
-                        background: bead ? `radial-gradient(circle at 35% 35%, ${bead.color.hex}ee, ${bead.color.hex}77)` : "rgba(220,80,120,0.07)",
-                        border: bead ? "2px solid rgba(255,255,255,0.6)" : "2px dashed rgba(220,80,120,0.35)",
-                        boxShadow: bead ? `0 2px 10px ${bead.color.hex}55` : "none",
-                      }}>
-                      {!bead && <span style={{ color: "hsl(var(--warm-pink))", opacity: 0.4 }}>+</span>}
-                    </div>
+                    <HtmlBead key={i} bead={placedBeads[idx] ?? null} size={40}
+                      onClick={() => placeBeadOnSlot(idx)} />
                   );
                 })}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       );
@@ -383,30 +526,10 @@ function ConstructorPage() {
               const t = i / (slots - 1);
               const x = 20 + t * 460;
               const y = 30 + Math.sin(t * Math.PI) * 120;
-              const bead = placedBeads[i];
+              const r = i === Math.floor(slots / 2) ? 15 : 12;
               return (
-                <g key={i} onClick={() => placeBeadOnSlot(i)} style={{ cursor: "pointer" }}>
-                  {bead && (
-                    <defs>
-                      <radialGradient id={`ng-${i}`} cx="35%" cy="35%" r="65%">
-                        <stop offset="0%" stopColor={bead.color.hex} />
-                        <stop offset="100%" stopColor={bead.color.hex} stopOpacity="0.6" />
-                      </radialGradient>
-                    </defs>
-                  )}
-                  <circle cx={x} cy={y} r={i === Math.floor(slots / 2) ? 16 : 13}
-                    fill={bead ? `url(#ng-${i})` : "rgba(220,80,120,0.07)"}
-                    stroke={bead ? "rgba(255,255,255,0.7)" : "rgba(220,80,120,0.3)"}
-                    strokeWidth={bead ? 2 : 1.5}
-                    strokeDasharray={bead ? "none" : "4 3"}
-                    style={{ filter: bead ? "drop-shadow(0 2px 6px rgba(0,0,0,0.15))" : "none" }}
-                    className="transition-all hover:opacity-80"
-                  />
-                  {!bead && (
-                    <text x={x} y={y + 1} textAnchor="middle" dominantBaseline="middle"
-                      fontSize="10" fill="rgba(220,80,120,0.4)">+</text>
-                  )}
-                </g>
+                <SvgBead key={i} bead={placedBeads[i]} cx={x} cy={y} r={r}
+                  onClick={() => placeBeadOnSlot(i)} />
               );
             })}
           </svg>
@@ -421,21 +544,10 @@ function ConstructorPage() {
         </p>
         <div className="w-4 h-6 rounded-t-full border-2 mb-1"
           style={{ borderColor: "hsl(var(--warm-gold))" }} />
-        {Array.from({ length: slots }).map((_, i) => {
-          const bead = placedBeads[i];
-          return (
-            <div key={i}
-              onClick={() => placeBeadOnSlot(i)}
-              className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer transition-all hover:scale-110"
-              style={{
-                background: bead ? `radial-gradient(circle at 35% 35%, ${bead.color.hex}ee, ${bead.color.hex}77)` : "rgba(220,80,120,0.07)",
-                border: bead ? "2px solid rgba(255,255,255,0.6)" : "2px dashed rgba(220,80,120,0.35)",
-                boxShadow: bead ? `0 2px 10px ${bead.color.hex}55` : "none",
-              }}>
-              {!bead && <span style={{ color: "hsl(var(--warm-pink))", opacity: 0.4 }}>+</span>}
-            </div>
-          );
-        })}
+        {Array.from({ length: slots }).map((_, i) => (
+          <HtmlBead key={i} bead={placedBeads[i]} size={40}
+            onClick={() => placeBeadOnSlot(i)} />
+        ))}
       </div>
     );
   };
@@ -596,8 +708,6 @@ function ConstructorPage() {
                   {filteredBeads.map((bead, i) => {
                     const isSelected = selectedBead?.color.name === bead.color.name &&
                       selectedBead?.shape === bead.shape;
-                    const isHeart = bead.shape === "heart";
-                    const isStar = bead.shape === "star";
                     return (
                       <button
                         key={i}
@@ -608,16 +718,9 @@ function ConstructorPage() {
                           border: isSelected ? `2px solid ${bead.color.hex}` : "2px solid transparent",
                           boxShadow: isSelected ? `0 0 12px ${bead.color.hex}44` : "none",
                         }}>
-                        {isHeart || isStar ? (
-                          <span style={{ fontSize: 22 }}>{isHeart ? "❤️" : "⭐"}</span>
-                        ) : (
-                          <div style={{
-                            width: 24, height: 24,
-                            background: `radial-gradient(circle at 35% 35%, ${bead.color.hex}ee, ${bead.color.hex}88)`,
-                            borderRadius: bead.shape === "round" ? "50%" : bead.shape === "oval" ? "50% / 35%" : bead.shape === "facet" ? "30%" : bead.shape === "tube" ? "6px" : "50%",
-                            boxShadow: `inset -2px -2px 4px rgba(0,0,0,0.15), inset 2px 2px 4px rgba(255,255,255,0.4)`,
-                          }} />
-                        )}
+                        <div style={{ transform: "scale(0.75)", transformOrigin: "center" }}>
+                          <HtmlBead bead={bead} size={36} onClick={() => {}} />
+                        </div>
                         {isSelected && (
                           <div className="absolute -top-1 -right-1 w-4 h-4 gradient-brand rounded-full flex items-center justify-center">
                             <Icon name="Check" size={9} className="text-white" />
@@ -731,8 +834,10 @@ export default function Index() {
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <button
             onClick={() => setPage("home")}
-            className="flex items-center gap-2 font-cormorant text-2xl font-semibold gradient-text hover:scale-105 transition-transform">
-            ✨ BeadCraft
+            className="flex items-center gap-2 hover:scale-105 transition-transform">
+            <span className="font-cormorant text-2xl font-semibold gradient-text">✨ kittybeadsy</span>
+            <span className="hidden sm:block text-xs font-golos px-2 py-0.5 rounded-full glass-warm border border-[hsl(var(--warm-pink))]/30"
+              style={{ color: "hsl(var(--warm-deep))" }}>конструктор</span>
           </button>
 
           <div className="hidden md:flex items-center gap-6">
@@ -786,7 +891,7 @@ export default function Index() {
 
       <footer className="border-t border-[hsl(var(--warm-pink))]/15 py-8 px-4 mt-10">
         <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <span className="font-cormorant text-xl gradient-text font-semibold">✨ BeadCraft</span>
+          <span className="font-cormorant text-xl gradient-text font-semibold">✨ kittybeadsy</span>
           <p className="text-sm" style={{ color: "hsl(var(--muted-foreground))" }}>
             Конструктор украшений из бусин — создавай эскизы онлайн
           </p>
